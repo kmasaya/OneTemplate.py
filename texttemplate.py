@@ -42,12 +42,12 @@ class Node(object):
 
 
 class Variable(Node):
-    
+
     def __init__(self, expr):
         self.codeobj = _compile(expr, '<string>', 'eval')
-    
+
     def evaluate(self, namespace):
-        
+
         obj = eval(self.codeobj, namespace)
         escape = namespace.get('__escape__')
         if escape:
@@ -61,76 +61,76 @@ class Variable(Node):
 
 
 class Block(Node):
-    
+
     def __init__(self):
         self.childnodes = []
-    
+
     def appendchild(self, childnode):
         self.childnodes.append(childnode)
-    
+
     def evaluate(self, namespace):
         return ''.join([x.evaluate(namespace) for x in self.childnodes])
 
 
 class IfBlock(Block):
-    
+
     def __init__(self, expr):
-        
+
         Block.__init__(self)
         self.codeobj_list = [_compile(expr.strip(), '<string>', 'eval')]
         self.ifnodes_list = [self.childnodes]
         self.elsenodes = []
-    
+
     def elif_(self, expr):
-        
+
         if self.childnodes is self.elsenodes:
             raise TextTemplateError('else_() has already been called')
-        
+
         self.codeobj_list.append(_compile(expr.strip(), '<string>', 'eval'))
         self.childnodes = []
         self.ifnodes_list.append(self.childnodes)
-    
+
     def else_(self):
-        
+
         if self.childnodes is self.elsenodes:
             raise TextTemplateError('else_() has already been called')
-        
+
         self.childnodes = self.elsenodes
-    
+
     def evaluate(self, namespace):
-        
+
         for codeobj, childnodes in zip(self.codeobj_list, self.ifnodes_list):
             if eval(codeobj, namespace):
                 self.childnodes = childnodes
                 break
         else:
             self.childnodes = self.elsenodes
-        
+
         return Block.evaluate(self, namespace)
 
 
 class ForBlock(Block):
-    
+
     def __init__(self, expr):
-        
+
         Block.__init__(self)
         self.codeobj = _compile('(locals() for %s)' % expr, '<string>', 'eval')
-    
+
     def evaluate(self, namespace):
-        
+
         results = []
         for localnamespace in eval(self.codeobj, namespace):
             namespace.update(localnamespace)
             results.append(Block.evaluate(self, namespace))
-        
+
         return ''.join(results)
 
 
 class ExecBlock(Block):
-    
+
     def execute(self, namespace):
         exec(Block.evaluate(self, namespace), namespace)
-    
+
     def evaluate(self, namespace):
         return ''
 
@@ -140,36 +140,36 @@ class EncodingBlock(Block):
 
 
 class Text(Node):
-    
+
     rx_escape = re.compile(r'^[ \t]*\\(?!\n)|\\\n', re.M)
-    
+
     def __init__(self, data):
         self.value = self.rx_escape.sub('', data)
-    
+
     def evaluate(self, namespace):
         return self.value
 
 
 class Template(Block):
-    
+
     """simple structural text template class """
-    
+
     encoding = None
-    
+
     def __init__(self, code=''):
-        
+
         Block.__init__(self)
         self.namespace = {}
-        
+
         parse(code, TemplateHandler(self))
-        
+
         if '__escape__' in self.namespace:
             self.namespace['__nonescape__'] = NonEscapeValue
 
     def evaluate(self, namespace=None, **kwds):
-        
+
         """apply values in namespace to the template and return result """
-        
+
         nsglobal = self.namespace.copy()
         if namespace:
             nsglobal.update(namespace)
@@ -179,26 +179,26 @@ class Template(Block):
 
 
 class TemplateHandler(object):
-    
+
     def __init__(self, root):
         self.root = root
         self.nodestack = [self.root]
-    
+
     def get_result(self):
-        
+
         if len(self.nodestack) != 1:
             raise TemplateSyntaxError('invalid syntax')
-        
+
         return self.root
-    
+
     def handle_block(self, expr):
-        
+
         tokens = expr.split(None, 1)
         if not tokens:
             raise TemplateSyntaxError('invalid syntax')
         tagname = tokens.pop(0)
         params = ''.join(tokens)
-        
+
         if tagname == 'end':
             node = self.nodestack.pop()
             if isinstance(node, ExecBlock):
@@ -236,27 +236,27 @@ class TemplateHandler(object):
             self.nodestack.append(node)
         else:
             raise TemplateSyntaxError('invalid tag name %r' % tagname)
-    
+
     def handle_variable(self, expr):
         self.nodestack[-1].appendchild(Variable(expr))
-    
+
     def handle_comment(self, expr):
         pass
-    
+
     def handle_text(self, expr):
         self.nodestack[-1].appendchild(Text(expr))
 
 
 def compile_until(terminators, source, filename, mode, flags=0, dont_inherit=0):
-    
-    """Do built-in `compile()` until one of the tokens in 
+
+    """Do built-in `compile()` until one of the tokens in
     `terminators` found in `source`.
-    
+
     Return `(codeobj, offset)` tuple.
-    
-    The argument `terminators` is a list of string tokens specifies 
+
+    The argument `terminators` is a list of string tokens specifies
     the end of the source code.
-    
+
     >>> src = 'a=3}}'
     >>> codeobj, offset = compile_until(['}}'], src, '<string>', 'exec')
     >>> src[offset:]
@@ -265,7 +265,7 @@ def compile_until(terminators, source, filename, mode, flags=0, dont_inherit=0):
     >>> a
     3
     """
-    
+
     try:
         codeobj = _compile(source, filename, mode, flags, dont_inherit)
     except SyntaxError as e:
@@ -290,9 +290,9 @@ def compile_until(terminators, source, filename, mode, flags=0, dont_inherit=0):
 
 
 def tokenize(data, pos=0):
-    
+
     """parse template code and yield name, start, end and data as tuple """
-    
+
     while pos < len(data):
         for name, stag, etag in tagset:
             if data.startswith(stag, pos):
@@ -314,9 +314,9 @@ def tokenize(data, pos=0):
         pos = next
 
 def parse(data, handler, pos=0):
-    
+
     """parse template code and call appropriate methods of handler """
-    
+
     try:
         for name, start, end, expr in tokenize(data, pos):
             method = getattr(handler, 'handle_'+name)
@@ -331,21 +331,21 @@ def parse(data, handler, pos=0):
 
 
 def main(argv=None, stdout=None):
-    
+
     if argv is None:
         argv = sys.argv[1:]
     if stdout is None:
         stdout = sys.stdout
-    
+
     from optparse import OptionParser
-    
+
     parser = OptionParser('python %prog [options] filenames...')
     parser.add_option('-e', '--execute',
                       help='execute given code before evaluation')
     parser.add_option('-f', '--filename',
                       help='run given Python script before evaluation')
     opts, args = parser.parse_args(argv)
-    
+
     namespace = {}
     if opts.execute:
         exec(opts.execute, namespace)
