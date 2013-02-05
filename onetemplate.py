@@ -12,7 +12,8 @@ from __builtin__ import compile as _compile
 __version__ = '$Rev: 2199 $'
 
 
-tagset = [('block', '{%', '%}'),
+tagset = [('include', '{:', ':}'),
+          ('block', '{%', '%}'),
           ('variable', '{{', '}}'),
           ('comment', '{#', '#}'),]
 rx_stags = re.compile('|'.join(re.escape(x[1]) for x in tagset))
@@ -59,6 +60,14 @@ class Variable(Node):
             ret = unicode(obj)
         return ret
 
+class Include(Node):
+
+    def __init__(self, expr):
+        self.filename = expr
+
+    def evaluate( self, namespace):
+        template = Template( open( self.filename, "r").read().decode( "UTF-8"))
+        return template.evaluate( namespace)
 
 class Block(Node):
 
@@ -242,6 +251,18 @@ class TemplateHandler(object):
 
     def handle_comment(self, expr):
         pass
+
+    def handle_include( self, expr):
+        tokens = expr.split( None, 1)
+        if not tokens:
+            raise TemplateSyntaxError('invalid syntax')
+        tagname = tokens.pop(0)
+        params = tokens.pop(0)
+
+        if tagname == 'include':
+            self.nodestack[-1].appendchild(Include( params))
+        else:
+            raise TemplateSyntaxError('invalid tag name %r' % tagname)
 
     def handle_text(self, expr):
         self.nodestack[-1].appendchild(Text(expr))
